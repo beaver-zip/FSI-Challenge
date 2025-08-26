@@ -1,0 +1,8 @@
+pandas
+tqdm
+torch
+transformers
+faiss-cpu
+sentence-transformers
+PyMuPDF
+langchain

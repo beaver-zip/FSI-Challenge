@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.egg-info/
+parts/
+sdist/
+var/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDEs
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
+
+# Large files / Generated files
+model/
+RAG/doc_metadata.pkl
+RAG/faiss_index.bin
