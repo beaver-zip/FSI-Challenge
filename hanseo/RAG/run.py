@@ -15,7 +15,7 @@ SAMPLE_SUBMISSION_PATH = "sample_submission.csv"
 SUBMISSION_CSV_PATH = "submission.csv"
 
 PDF_PATH = "pdfs"
-LLM_MODEL_PATH = "/workspace/model"
+LLM_MODEL_PATH = "/workspace/hanseo/model"
 EMBEDDING_MODEL_NAME = "upskyy/bge-m3-korean"
 FAISS_INDEX_PATH = "faiss_index.bin"
 DOC_META_PATH = "doc_metadata.pkl"
@@ -127,20 +127,19 @@ def make_zeroshot_prompt(question_text):
 
 # LLM 호출 1: 주제 분류 (법률은 pdfs에 있는 문서로 RAG, 보안/금융은 Zero-shot으로 처리)
 def classify_question_with_llm(question: str, pipe) -> str:
-    classification_prompt = f
-    """다음 질문의 주제를 "법률", "금융", "보안" 중 하나로만 답하세요.
+    classification_prompt = f"""다음 질문의 주제를 "법률", "금융", "보안" 중 하나로만 답하세요.
+
+질문: 전자금융거래법 제10조에 명시된 이용자의 권리가 아닌 것은?
+주제: 법률
     
-    질문: 전자금융거래법 제10조에 명시된 이용자의 권리가 아닌 것은?
-    주제: 법률
+질문: 피싱 공격을 예방하기 위한 사용자 측면의 보안 수칙으로 옳지 않은 것은?
+주제: 보안
     
-    질문: 피싱 공격을 예방하기 위한 사용자 측면의 보안 수칙으로 옳지 않은 것은?
-    주제: 보안
+질문: 변동성이 큰 시장에서 안정적인 수익을 추구하는 투자 포트폴리오 구성 방법은?
+주제: 금융
     
-    질문: 변동성이 큰 시장에서 안정적인 수익을 추구하는 투자 포트폴리오 구성 방법은?
-    주제: 금융
-    
-    질문: {question}
-    주제:"""
+질문: {question}
+주제:"""
     
     raw_output = pipe(classification_prompt, max_new_tokens=5, do_sample=False)
     
