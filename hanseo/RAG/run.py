@@ -5,20 +5,24 @@ import pandas as pd
 from tqdm import tqdm
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from huggingface_hub import snapshot_download
 
 from Preprocessor.preprocessor import DocumentProcessor
 from VDB.localVDB import LocalVectorDB
 
 # --- 경로 설정 ---
-TEST_CSV_PATH = "test.csv"
-SAMPLE_SUBMISSION_PATH = "sample_submission.csv"
-SUBMISSION_CSV_PATH = "submission.csv"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_CSV_PATH = os.path.join(SCRIPT_DIR, "test.csv")
+SAMPLE_SUBMISSION_PATH = os.path.join(SCRIPT_DIR, "sample_submission.csv")
+SUBMISSION_CSV_PATH = os.path.join(SCRIPT_DIR, "submission.csv")
 
-PDF_PATH = "pdfs"
-LLM_MODEL_PATH = "/workspace/hanseo/model"
+PDF_PATH = os.path.join(SCRIPT_DIR, "pdfs")
+LLM_MODEL_ID = "K-intelligence/Midm-2.0-Base-Instruct"
+LLM_MODEL_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "model"))
 EMBEDDING_MODEL_NAME = "upskyy/bge-m3-korean"
-FAISS_INDEX_PATH = "faiss_index.bin"
-DOC_META_PATH = "doc_metadata.pkl"
+
+FAISS_INDEX_PATH = os.path.join(SCRIPT_DIR, "faiss_index.bin")
+DOC_META_PATH = os.path.join(SCRIPT_DIR, "doc_metadata.pkl")
 
 # 객관식 여부 판단 함수 (baseline)
 def is_multiple_choice(question_text):
@@ -81,8 +85,8 @@ def make_rag_prompt(question_text, context):
 
     if is_multiple_choice(question_text): # RAG 객관식 프롬프트
         return (
-            "당신은 금융보안 전문가입니다.\n"
-            "주어진 [참고 자료]를 참고하여, [질문]에 대해 적절한 **정답 선택지 번호만 출력**하세요.\n\n"
+            "당신은 금융보안 전문가입니다. 주어진 [참고 자료]와 당신의 지식을 활용하여, 다음 [질문]에 가장 적절한 **선택지 번호 하나만** 고르세요.\n"
+            "**반드시 주어진 선택지 중 하나의 번호를 답변해야 합니다.**\n\n"
             "[참고 자료]\n"
             f"{context_str}\n\n"
             "[질문]\n"
@@ -93,15 +97,17 @@ def make_rag_prompt(question_text, context):
         )
     else: # RAG 주관식 프롬프트
         return (
-            "당신은 금융보안 전문가입니다.\n"
-            "주어진 [참고 자료]를 참고하여, [질문]에 대해 **세 문장 이내로 정확하고 간결하게** 서술하세요.\n"
-            "만약 [참고 자료]의 내용이 [질문]과 관련 없거나 부족한 경우, 당신의 전문 지식을 활용하여 답변하세요.\n\n"
-            "[참고 자료]\n"
-            f"{context_str}\n\n"
+            "당신은 금융보안 전문가입니다. 다음 질문에 대해 당신의 전문 지식을 활용하여 답변하세요.\n"
+            "답변을 작성할 때, 주어진 [참고 자료]를 최대한 활용하되, 자료에 내용이 없거나 부족하더라도 반드시 질문에 대한 답변을 해야 합니다.\n"
+            "**'자료에 내용이 없다'거나 '알 수 없다'는 식의 답변은 절대 하지 마세요.**\n"
+            "답변은 **세 문장 이내로 정확하고 간결하게** 서술하세요.\n\n"
             "[질문]\n"
             f"{question_text}\n\n"
+            "[참고 자료]\n"
+            f"{context_str}\n\n"
             "답변:"
         )
+
 
 def make_zeroshot_prompt(question_text):
     question, options = extract_question_and_choices(question_text)
@@ -118,11 +124,35 @@ def make_zeroshot_prompt(question_text):
     else:
         return (
             "당신은 금융보안 전문가입니다.\n"
-            "다음 주관식 질문에 대해 **세 문장 이내로 정확하고 간결하게** 서술하세요.\n\n"
+            "다음 주관식 질문에 대해 정확하고 간결하게 서술하세요.\n\n"
             "[질문]\n"
             f"{question_text}\n\n"
             "답변:"
         )
+
+
+# baseline.ipynb의 프롬프트 생성기
+def make_baseline_prompt(text):
+    if is_multiple_choice(text):
+        question, options = extract_question_and_choices(text)
+        prompt = (
+                "당신은 금융보안 전문가입니다.\n"
+                "아래 질문에 대해 적절한 **정답 선택지 번호만 출력**하세요.\n\n"
+                f"질문: {question}\n"
+                "선택지:\n"
+                f"{chr(10).join(options)}\n\n"
+                "답변:"
+                )
+    else:
+        prompt = (
+                "당신은 금융보안 전문가입니다.\n"
+                "아래 주관식 질문에 대해 정확하고 간략한 설명을 작성하세요.\n\n"
+                f"질문: {text}\n\n"
+                "답변:"
+                )
+    return prompt
+
+
 
 
 # LLM 호출 1: 주제 분류 (법률은 pdfs에 있는 문서로 RAG, 보안/금융은 Zero-shot으로 처리)
@@ -182,7 +212,19 @@ if __name__ == "__main__":
         print("기존 FAISS 인덱스를 로드합니다.")
         vdb.load_index(FAISS_INDEX_PATH, DOC_META_PATH)
 
-    # 3. LLM 로드
+    # 3. LLM 모델 다운로드 및 로드
+    if not os.path.exists(LLM_MODEL_PATH):
+        print(f"LLM 모델({LLM_MODEL_ID})을 다운로드합니다. 경로: {LLM_MODEL_PATH}")
+        snapshot_download(
+            repo_id=LLM_MODEL_ID,
+            local_dir=LLM_MODEL_PATH,
+            local_dir_use_symlinks=False,
+            resume_download=True
+        )
+        print("LLM 모델 다운로드 완료.")
+    else:
+        print(f"기존 LLM 모델을 사용합니다. 경로: {LLM_MODEL_PATH}")
+        
     print("메인 LLM을 로드합니다...")
     tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
     model = AutoModelForCausalLM.from_pretrained(
@@ -212,14 +254,15 @@ if __name__ == "__main__":
         if category == "법률":
             retrieved_docs = vdb.search(question, k=3)
             prompt = make_rag_prompt(question, retrieved_docs)
-        else:
-            prompt = make_zeroshot_prompt(question)
-
-        # 객관식 / 주관식 답변 파라미터 설정
-        if is_multiple_choice(question): # 객관식
-            generation_kwargs = {"max_new_tokens": 5, "do_sample": False}
-        else: # 주관식
-            generation_kwargs = {"max_new_tokens": 150, "temperature": 0.1, "top_p": 0.95, "do_sample": True}
+            # RAG 파라미터
+            if is_multiple_choice(question):
+                generation_kwargs = {"max_new_tokens": 5, "do_sample": False}
+            else:
+                generation_kwargs = {"max_new_tokens": 150, "temperature": 0.1, "top_p": 0.95, "do_sample": True}
+        else: # 금융, 보안
+            prompt = make_baseline_prompt(question) # baseline 프롬프트 사용
+            # baseline 파라미터 사용
+            generation_kwargs = {"max_new_tokens": 128, "temperature": 0.2, "top_p": 0.9, "do_sample": True}
 
         output = pipe(prompt, **generation_kwargs)
         
