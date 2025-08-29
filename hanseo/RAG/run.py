@@ -9,6 +9,7 @@ from huggingface_hub import snapshot_download
 
 from Preprocessor.preprocessor import DocumentProcessor
 from VDB.localVDB import LocalVectorDB
+from peft import PeftModel
 
 # --- 경로 설정 ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +20,8 @@ SUBMISSION_CSV_PATH = os.path.join(SCRIPT_DIR, "submission.csv")
 PDF_PATH = os.path.join(SCRIPT_DIR, "pdfs")
 LLM_MODEL_ID = "K-intelligence/Midm-2.0-Base-Instruct"
 LLM_MODEL_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "model"))
+LORA_ASSETS_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "ckpt_tapt_mcqa_stage1")) # For Tokenizer
+LORA_ADAPTER_PATH = os.path.join(LORA_ASSETS_PATH, "lora_adapter") # For Adapter weights
 EMBEDDING_MODEL_NAME = "upskyy/bge-m3-korean"
 
 FAISS_INDEX_PATH = os.path.join(SCRIPT_DIR, "faiss_index.bin")
@@ -100,36 +103,13 @@ def make_rag_prompt(question_text, context):
             "당신은 금융보안 전문가입니다. 다음 질문에 대해 당신의 전문 지식을 활용하여 답변하세요.\n"
             "답변을 작성할 때, 주어진 [참고 자료]를 최대한 활용하되, 자료에 내용이 없거나 부족하더라도 반드시 질문에 대한 답변을 해야 합니다.\n"
             "**'자료에 내용이 없다'거나 '알 수 없다'는 식의 답변은 절대 하지 마세요.**\n"
-            "답변은 **세 문장 이내로 정확하고 간결하게** 서술하세요.\n\n"
+            "답변은 **네 문장 이내로 정확하고 간결하게** 서술하세요.\n\n"
             "[질문]\n"
             f"{question_text}\n\n"
             "[참고 자료]\n"
             f"{context_str}\n\n"
             "답변:"
         )
-
-
-def make_zeroshot_prompt(question_text):
-    question, options = extract_question_and_choices(question_text)
-    if is_multiple_choice(question_text):
-        return (
-            "당신은 금융보안 전문가입니다.\n"
-            "아래 질문에 대해 적절한 **정답 선택지 번호만 출력**하세요.\n\n"
-            "[질문]\n"
-            f"{question}\n\n"
-            "[선택지]\n"
-            f"{chr(10).join(options)}\n\n"
-            "답변:"
-        )
-    else:
-        return (
-            "당신은 금융보안 전문가입니다.\n"
-            "다음 주관식 질문에 대해 정확하고 간결하게 서술하세요.\n\n"
-            "[질문]\n"
-            f"{question_text}\n\n"
-            "답변:"
-        )
-
 
 # baseline.ipynb의 프롬프트 생성기
 def make_baseline_prompt(text):
@@ -146,7 +126,7 @@ def make_baseline_prompt(text):
     else:
         prompt = (
                 "당신은 금융보안 전문가입니다.\n"
-                "아래 주관식 질문에 대해 정확하고 간략한 설명을 작성하세요.\n\n"
+                "아래 주관식 질문에 대해 **네 문장 이내로 정확하고 간결하게** 답변하세요.\n\n"
                 f"질문: {text}\n\n"
                 "답변:"
                 )
@@ -225,21 +205,34 @@ if __name__ == "__main__":
     else:
         print(f"기존 LLM 모델을 사용합니다. 경로: {LLM_MODEL_PATH}")
         
-    print("메인 LLM을 로드합니다...")
-    tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
-    model = AutoModelForCausalLM.from_pretrained(
+    print("기본 모델과 LoRA 어댑터 모델을 모두 로드합니다...")
+    # 1. 토크나이저 로드 (LoRA 튜닝된 토크나이저를 공통으로 사용)
+    tokenizer = AutoTokenizer.from_pretrained(LORA_ASSETS_PATH)
+
+    # 2. 기본 모델 및 파이프라인 생성 (법률 RAG용)
+    base_model = AutoModelForCausalLM.from_pretrained(
         LLM_MODEL_PATH,
         device_map="auto",
         load_in_4bit=True,
         torch_dtype=torch.float16
     )
-    pipe = pipeline(
+    base_pipe = pipeline(
         "text-generation",
-        model=model,
+        model=base_model,
         tokenizer=tokenizer,
         device_map="auto"
     )
-    print("LLM 로드 완료.")
+    print("-> 기본 모델 파이프라인 로드 완료.")
+
+    # 3. LoRA 어댑터 적용 모델 및 파이프라인 생성 (금융/보안용)
+    lora_model = PeftModel.from_pretrained(base_model, LORA_ADAPTER_PATH)
+    lora_pipe = pipeline(
+        "text-generation",
+        model=lora_model,
+        tokenizer=tokenizer,
+        device_map="auto"
+    )
+    print("-> LoRA 적용 모델 파이프라인 로드 완료.")
 
     # 4. 추론 시작 - 조건부 RAG
     print("조건부 RAG 추론을 시작합니다...")
@@ -248,23 +241,27 @@ if __name__ == "__main__":
 
     for _, row in tqdm(test_df.iterrows(), total=test_df.shape[0], desc="RAG 추론 중"):
         question = row['Question']
-        category = classify_question_with_llm(question, pipe)
+        # 질문 분류는 기본 모델을 사용
+        category = classify_question_with_llm(question, base_pipe)
         print(f"\n질문 ID: {row['ID']}, 분류: {category}")
 
         if category == "법률":
             retrieved_docs = vdb.search(question, k=3)
             prompt = make_rag_prompt(question, retrieved_docs)
-            # RAG 파라미터
+            # RAG 파라미터 (기존 설정 복원)
             if is_multiple_choice(question):
                 generation_kwargs = {"max_new_tokens": 5, "do_sample": False}
             else:
                 generation_kwargs = {"max_new_tokens": 150, "temperature": 0.1, "top_p": 0.95, "do_sample": True}
+            # 법률 문제는 기본 모델 사용
+            output = base_pipe(prompt, **generation_kwargs)
+
         else: # 금융, 보안
             prompt = make_baseline_prompt(question) # baseline 프롬프트 사용
-            # baseline 파라미터 사용
+            # baseline 파라미터 (사용자 요청으로 수정)
             generation_kwargs = {"max_new_tokens": 128, "temperature": 0.2, "top_p": 0.9, "do_sample": True}
-
-        output = pipe(prompt, **generation_kwargs)
+            # 금융/보안 문제는 LoRA 모델 사용
+            output = lora_pipe(prompt, **generation_kwargs)
         
         pred_answer = extract_answer_only(output[0]["generated_text"], original_question=question)
         preds.append(pred_answer)

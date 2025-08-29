@@ -1,106 +1,103 @@
-# 금융보안원 AI 챌린지 2024 - RAG 기반 질의응답 시스템
+# FSI-Challenge: 금융보안 질의응답 RAG 시스템
 
-## 1. 프로젝트 개요
+이 프로젝트는 금융보안 관련 질문에 답변하기 위한 Retrieval-Augmented Generation (RAG) 시스템을 구현합니다. 질문의 주제(법률, 금융, 보안)에 따라 적절한 답변 전략(RAG 또는 Zero-shot)과 모델(기본 LLM 또는 LoRA 튜닝 LLM)을 사용하여 정확하고 효율적인 답변을 제공합니다.
 
-본 프로젝트는 금융보안 분야의 질문에 대해 정확하고 신뢰성 있는 답변을 제공하는 QA(Question Answering) 시스템입니다. 사용자의 질문 유형을 LLM을 통해 동적으로 파악하고, 질문이 법률과 관련될 경우에만 RAG(Retrieval-Augmented Generation) 기술을 적용하여 답변의 정확도를 높이는 **조건부 RAG (Conditional RAG)** 방식을 핵심 전략으로 사용합니다.
+현재 버전:
+- 법률 : RAG, 기본모델
+- 금융/보안 : Zero-Shot, LoRA
 
-- **LLM**: `K-intelligence/Midm-2.0-Base-Instruct`
-- **Embedding Model**: `upskyy/bge-m3-korean`
-- **Vector DB**: `FAISS` (Facebook AI Similarity Search)
+## 주요 기능
 
----
+*   **PDF 문서 처리**: `pdfs/` 디렉토리에 있는 PDF 문서에서 텍스트를 추출하고, 청크로 분할하여 RAG 시스템에 활용합니다.
+*   **로컬 벡터 데이터베이스**: `upskyy/bge-m3-korean` 임베딩 모델과 FAISS를 사용하여 문서 청크의 임베딩을 생성하고 효율적인 검색을 위한 벡터 데이터베이스를 구축합니다.
+*   **질문 주제 분류**: 입력된 질문을 "법률", "금융", "보안" 세 가지 주제 중 하나로 분류하여 최적의 답변 전략을 결정합니다.
+*   **조건부 RAG/생성**:
+    *   **법률 관련 질문**: PDF 문서에서 검색된 관련 정보를 기반으로 RAG를 수행하여 답변을 생성합니다.
+    *   **금융/보안 관련 질문**: LoRA 튜닝된 LLM을 사용하여 Zero-shot 방식으로 답변을 생성합니다.
+*   **대규모 언어 모델 활용**: `K-intelligence/Midm-2.0-Base-Instruct` 모델을 기본 LLM으로 사용하며, 특정 주제에 대한 성능 향상을 위해 LoRA 어댑터를 적용합니다.
 
-## 2. 프로젝트 구조
+## 프로젝트 구조
 
 ```
 FSI-Challenge/
-└── hanseo/
-    ├── model/                     # LLM 모델 저장 디렉토리 (자동 생성)
-    ├── RAG/
-    │   ├── Preprocessor/
-    │   │   └── preprocessor.py    # PDF 문서 전처리기
-    │   ├── VDB/
-    │   │   └── localVDB.py        # FAISS 벡터 DB 관리 모듈
-    │   ├── pdfs/                  # 법률 정보 PDF 문서
-    │   │   ├── credit_information_law.pdf
-    │   │   ├── digital_sign_law.pdf
-    │   │   ├── network_law.pdf
-    │   │   ├── privacy_law.pdf
-    │   │   └── transaction_law.pdf
-    │   ├── doc_metadata.pkl       # 문서 메타데이터 (자동 생성)
-    │   ├── faiss_index.bin        # FAISS 인덱스 파일 (자동 생성)
-    │   ├── run.py                 # 메인 실행 스크립트
-    │   ├── sample_submission.csv  # 제출 양식 샘플
-    │   └── test.csv               # 테스트 질문 데이터
-    ├── README.md                  # 프로젝트 설명서
-    └── requirements.txt           # 필요 패키지 목록
+├── hanseo/
+│   ├── baseline.ipynb             # 베이스라인 모델 개발을 위한 Jupyter 노트북
+│   ├── README.md                  # 프로젝트 설명 (현재 파일)
+│   ├── requirements.txt           # Python 종속성 목록
+│   ├── ckpt_tapt_mcqa_stage1/     # LoRA 어댑터 및 토크나이저 관련 파일
+│   │   └── lora_adapter/          # LoRA 어댑터 가중치
+│   ├── model/                     # 기본 LLM 모델 파일
+│   └── RAG/
+│       ├── doc_metadata.pkl       # 문서 메타데이터 (벡터 DB용)
+│       ├── faiss_index.bin        # FAISS 벡터 인덱스 파일
+│       ├── run.py                 # 메인 실행 스크립트 (RAG 시스템)
+│       ├── sample_submission.csv  # 제출 양식 예시
+│       ├── submission.csv         # 최종 제출 파일
+│       ├── test.csv               # 테스트 질문 데이터
+│       ├── pdfs/                  # RAG에 사용될 PDF 문서들
+│       │   └── *.pdf
+│       ├── Preprocessor/
+│       │   └── preprocessor.py    # PDF 문서 전처리 스크립트
+│       └── VDB/
+│           └── localVDB.py        # 로컬 벡터 데이터베이스 관리 스크립트
+└── data_process/                  # 데이터 처리 관련 스크립트 (추정)
 ```
 
----
+## 설치 및 실행 방법
 
-## 3. 전체적인 동작 원리
+### 1. 환경 설정
 
-본 시스템은 `run.py` 스크립트 하나로 모든 과정이 실행됩니다. 동작 순서는 다음과 같습니다.
+Python 3.8 이상 버전이 필요합니다. 가상 환경을 사용하는 것을 권장합니다.
 
-1.  **초기 설정**:
-    - `run.py` 실행 시, 먼저 `hanseo/model` 폴더에 LLM이 존재하는지 확인합니다. 만약 모델이 없으면 Hugging Face Hub에서 자동으로 다운로드합니다.
-    - `RAG/` 폴더 내에 FAISS 벡터 인덱스(`faiss_index.bin`)가 있는지 확인합니다.
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# venv\Scripts\activate   # Windows
+```
 
-2.  **벡터 DB 생성 (최초 실행 시)**:
-    - FAISS 인덱스가 없다면, `pdfs/` 폴더의 법률 문서들을 `preprocessor.py`를 이용해 의미 있는 단위(chunk)로 분할합니다.
-    - `localVDB.py`가 분할된 텍스트 조각들을 임베딩 모델(`bge-m3-korean`)을 사용해 벡터로 변환합니다.
-    - 변환된 벡터들을 `FAISS` 인덱스로 구축하고, `faiss_index.bin` 파일로 저장하여 다음 실행부터는 이 과정을 생략합니다.
+### 2. 종속성 설치
 
-3.  **질의응답 추론**:
-    - `test.csv`에서 질문을 순서대로 읽어옵니다.
-    - **(핵심 로직)** 각 질문을 LLM에 보내 주제를 "법률", "금융", "보안" 중 하나로 분류합니다.
-    - **조건부 RAG 적용**:
-        - **"법률"** 질문: `localVDB.py`를 통해 FAISS DB에서 질문과 가장 유사한 법률 문서 조각 3개를 검색합니다. 검색된 내용을 참고자료로 삼아 프롬프트를 구성하고, LLM에 답변 생성을 요청합니다.
-        - **"금융" 또는 "보안" 질문**: 별도의 외부 자료 없이, LLM이 가진 자체 지식만으로 답변을 생성하는 Zero-shot 방식으로 프롬프트를 구성하여 질의합니다.
-    - 생성된 답변은 후처리 함수를 통해 문제 유형(객관식/주관식)에 맞게 정제됩니다.
+`requirements.txt` 파일에 명시된 모든 라이브러리를 설치합니다.
 
-4.  **제출 파일 생성**:
-    - 모든 질문에 대한 답변 생성이 완료되면, `sample_submission.csv` 형식에 맞춰 `submission.csv` 파일을 생성합니다.
+```bash
+pip install -r hanseo/requirements.txt
+```
 
----
+### 3. PDF 문서 준비
 
-## 4. 각 파일 및 폴더 설명
+RAG 시스템에 사용할 PDF 문서들을 `FSI-Challenge/hanseo/RAG/pdfs/` 디렉토리에 넣어주세요.
 
-- **`run.py`**:
-    - 전체 프로세스를 총괄하는 메인 스크립트입니다.
-    - 모델 및 벡터 DB 로드, 질문 분류, 조건부 RAG, 추론, 제출 파일 생성 등 모든 작업을 순차적으로 실행합니다.
-    - 최초 실행 시 필요한 모델과 벡터 DB를 자동으로 생성하는 기능이 포함되어 있습니다.
+### 4. 모델 및 인덱스 생성/다운로드
 
-- **`RAG/Preprocessor/preprocessor.py`**:
-    - PDF 문서를 텍스트로 변환하고, LLM이 처리하기 용이하도록 의미 있는 문단 단위로 분할하는 역할을 합니다.
+`run.py` 스크립트를 처음 실행하면, 필요한 LLM 모델(`K-intelligence/Midm-2.0-Base-Instruct`)과 임베딩 모델(`upskyy/bge-m3-korean`)이 자동으로 다운로드됩니다. 또한, `pdfs/` 디렉토리의 문서들을 기반으로 FAISS 인덱스와 문서 메타데이터가 생성됩니다.
 
-- **`RAG/VDB/localVDB.py`**:
-    - 임베딩 모델을 로드하고 FAISS 벡터 데이터베이스를 관리하는 클래스입니다.
-    - 텍스트를 벡터로 변환, FAISS 인덱스 생성/저장/로드, 유사도 검색 기능을 제공합니다.
+### 5. 시스템 실행
 
-- **`RAG/pdfs/`**:
-    - RAG의 기반 지식이 되는 법률 관련 PDF 문서들이 저장된 폴더입니다.
+테스트 질문(`test.csv`)에 대한 답변을 생성하고 `submission.csv` 파일을 만듭니다.
 
-- **`requirements.txt`**:
-    - 프로젝트 실행에 필요한 파이썬 라이브러리 목록입니다. `pip install -r requirements.txt` 명령어로 설치할 수 있습니다.
+```bash
+python hanseo/RAG/run.py
+```
 
-- **`model/`**:
-    - Hugging Face Hub에서 다운로드한 LLM 모델 파일들이 저장되는 폴더입니다. `run.py` 최초 실행 시 자동으로 생성됩니다.
+실행이 완료되면 `FSI-Challenge/hanseo/RAG/submission.csv` 파일에 결과가 저장됩니다.
 
----
+## 사용된 기술 스택
 
-## 5. 실행 방법
+*   **Python**
+*   **PyTorch**
+*   **Hugging Face Transformers**: LLM 로드 및 추론
+*   **PEFT (Parameter-Efficient Fine-Tuning)**: LoRA 어댑터 적용
+*   **Sentence-Transformers**: 문서 임베딩 생성
+*   **FAISS**: 벡터 검색
+*   **PyMuPDF (fitz)**: PDF 문서 처리
+*   **LangChain**: 텍스트 분할 (RecursiveCharacterTextSplitter)
+*   **Pandas**: 데이터 처리
+*   **tqdm**: 진행률 표시
 
-1.  **필요 패키지 설치**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+## 기여자
 
-2.  **스크립트 실행**:
-    `RAG` 폴더로 이동하여 `run.py`를 실행합니다.
-    ```bash
-    cd hanseo/RAG
-    python run.py
-    ```
-    - 최초 실행 시 LLM 모델과 FAISS 인덱스를 다운로드 및 생성하므로 시간이 다소 소요될 수 있습니다.
-    - 실행이 완료되면 `RAG` 폴더 내에 `submission.csv` 파일이 생성됩니다.
+[당신의 이름 또는 팀 이름]
+
+## 라이선스
+
+[프로젝트 라이선스 정보]

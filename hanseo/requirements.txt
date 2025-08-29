@@ -6,3 +6,5 @@ faiss-cpu
 sentence-transformers
 PyMuPDF
 langchain
+huggingface_hub
+peft
