@@ -156,7 +156,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model_name", type=str, default="K-intelligence/Midm-2.0-Base-Instruct")
     ap.add_argument("--data_file", type=str, default="output/dapt_corpus.txt")
-    ap.add_argument("--output_dir", type=str, default="ckpt_dapt_lora_2")
+    ap.add_argument("--output_dir", type=str, default="ckpt_dapt_lora")
     ap.add_argument("--seed", type=int, default=42)
 
     # 데이터/토크나이즈

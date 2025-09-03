@@ -273,8 +273,8 @@ def main():
     # Base / 어댑터
     ap.add_argument("--model_name", type=str, default="K-intelligence/Midm-2.0-Base-Instruct")
     ap.add_argument("--init_adapter_from", type=str, required=True,
-                    help="DAPT LoRA 어댑터 경로. 예: /workspace/main/ckpt_dapt_local_2/lora_adapter")
-    ap.add_argument("--output_dir", type=str, default="ckpt_tapt_mcqa_from_dapt")
+                    help="DAPT LoRA 어댑터 경로. 예: /workspace/main/ckpt_dapt_lora/lora_adapter")
+    ap.add_argument("--output_dir", type=str, default="ckpt_tapt_lora")
     ap.add_argument("--seed", type=int, default=42)
 
     # Cache/Temp
