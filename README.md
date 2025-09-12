@@ -46,7 +46,7 @@
 
 - **Debian/Ubuntu 기반 Linux:**
   ```bash
-  sudo apt-get update && sudo apt-get install -y libreoffice
+  apt-get update && apt-get install -y libreoffice
   ```
 - **macOS (Homebrew 사용):**
   ```bash
