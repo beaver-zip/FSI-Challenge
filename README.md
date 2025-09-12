@@ -42,6 +42,17 @@
 
 ### 2.1. 환경 설정
 
+`.doc` 파일 처리를 위해 시스템에 LibreOffice가 설치되어 있어야 합니다. 스크립트는 `soffice` 명령어를 사용하여 `.doc` 파일을 `.docx`로 변환합니다.
+
+- **Debian/Ubuntu 기반 Linux:**
+  ```bash
+  sudo apt-get update && sudo apt-get install -y libreoffice
+  ```
+- **macOS (Homebrew 사용):**
+  ```bash
+  brew install --cask libreoffice
+  ```
+
 1.  **가상 환경 생성 및 활성화**
     ```bash
     python3 -m venv .venv

@@ -61,7 +61,7 @@ LAWNUM_RE = re.compile(r"\\[\s*법률\s*제?(\d+)\s*호.*?\\]")
 ADDENDA_BLOCK_RE = re.compile(r"^<\s*제(\d+)호,\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\s*>$ ")
 
 def safe_name(s: str) -> str:
-    return re.sub(r"[\\/:*?"<>|]", "_", s).strip() or "untitled"
+    return re.sub(r'[\\/:*?"<>|]', '_', s).strip() or "untitled"
 
 def detect_soffice() -> Optional[str]:
     for cmd in [
