@@ -50,6 +50,7 @@
 
 2.  **필수 라이브러리 설치**
     ```bash
+    cd FSI-Challenge/
     pip install -r requirement.txt
     ```
 
