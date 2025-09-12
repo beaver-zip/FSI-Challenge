@@ -32,6 +32,6 @@ venv/
 
 # Secrets and large generated directories
 /.env
-/data/
+/data/processed/
 /db/
 /models/
