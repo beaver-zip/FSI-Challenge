@@ -1,0 +1,50 @@
+# =================================================================
+# Streamlit (for Inference App)
+# =================================================================
+streamlit==1.36.0
+
+# =================================================================
+# Common & RAG Dependencies
+# =================================================================
+pandas==2.2.2
+tqdm==4.66.4
+faiss-cpu==1.8.0
+sentence-transformers==3.0.1
+PyMuPDF==1.24.5
+langchain==0.2.5
+huggingface_hub==0.23.4
+
+# =================================================================
+# Core Hugging Face Stack (DAPT/TAPT Training & Inference)
+# =================================================================
+torch==2.3.1
+transformers==4.42.3
+datasets==2.20.0
+accelerate==0.31.0
+peft==0.11.1
+safetensors==0.4.3
+tokenizers==0.19.1
+sentencepiece==0.2.0
+
+# =================================================================
+# Data Preprocessing & Utilities (dahyun scripts)
+# =================================================================
+chardet==3.0.4
+unidecode==1.3.8
+python-docx==1.1.2
+textract==1.6.5
+
+# =================================================================
+# Environment Variable Management
+# =================================================================
+python-dotenv==1.0.1
+
+# NOTE: textract may require system-level libraries for .doc file processing.
+# On macOS, you might need to install them via Homebrew:
+# brew install poppler antiword unrtf tesseract swig
+
+# =================================================================
+# Optional: 4-bit Quantization (QLoRA)
+# For Linux/x86_64 systems only.
+# =================================================================
+bitsandbytes==0.43.1; platform_system == "Linux" and platform_machine == "x86_64"

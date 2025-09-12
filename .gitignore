@@ -29,6 +29,9 @@ venv/
 .DS_Store
 
 # Large files / Generated files
-model/
-RAG/doc_metadata.pkl
-RAG/faiss_index.bin
+
+# Secrets and large generated directories
+/.env
+/data/
+/db/
+/models/
